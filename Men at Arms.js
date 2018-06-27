@@ -48,6 +48,19 @@ class Player{
 		this.squads = [];
 	}
 	
+	selectSquad(squad){
+		if(squad instanceof Squad)
+			if(squad.owner === this){
+				this.selectedSquad = squad;
+			}
+	}
+	
+	deselectSquad(){
+		if(this.selectedSquad) {
+			this.selectedSquad = undefined;
+		}
+	}
+	
 	deploySquadAt(x, y){
 		if(this.squadSizeSetting > this.numSoldiers) return;
 		var squad = new Squad(x, y, this.squadSizeSetting, this, this.squadTypeSetting);
@@ -55,17 +68,15 @@ class Player{
 		this.squads.push(squad);
 	}
 	
-	getSquadAt(x, y){
-		var d = this.squads.filter((s) => {
+	getSquadsAt(x, y){
+		return this.squads.filter((s) => {
 			return ((s.x-x)*(s.x-x) + (s.y-y)*(s.y-y) < clickRadius);
 		});
-		if(d.length > 0) return d[0];
-		else return undefined;
 	}
 	
 	drawSquads(pen, sniperImage, infantryImage, squadFillStyle, mapPosX, mapPosY){
 		if(this.squads.length == 0) return;
-		pen.fillStyle = squadFillStyle;
+		//pen.fillStyle = squadFillStyle;
 		this.squads.forEach((s) => {
 			switch(s.type){
 				case SQUAD_TYPE_INFANTRY:
@@ -76,6 +87,21 @@ class Player{
 					break;
 			}
 		});
+		var t = this.selectedSquad;
+		if(t){
+			var i = (t.type === SQUAD_TYPE_INFANTRY)? infantryImage: sniperImage;
+			var x = t.x - i.width/2 + mapPosX, y = t.y - i.height/2 + mapPosY;
+			var fs = 3 * i.height / HUD_SIZE;
+			pen.lineWidth = 5;
+			pen.strokeStyle = HUD_FOREGROUND_COLOR;
+			pen.strokeRect(x, y, i.width, i.height);
+			pen.fillStyle = HUD_FOREGROUND_COLOR;
+			pen.font = fs + "px Georgia";
+			pen.fillText("Health: " + t.health, x, y + i.height + fs);
+			pen.fillText("Attack: " + t.attack, x, y + i.height + 2 * fs);
+			pen.fillText("Armour: " + t.armour, x, y + i.height + 3 * fs);
+			pen.fillText("Soldiers: " + t.size, x, y + i.height + 4 * fs);
+		}
 	}
 }
 
@@ -106,7 +132,10 @@ function input(){
 				preY = (e.clientY - canvas.offsetTop) - imageY;
 				break;
 			case 2: //Right Click
-				player.deploySquadAt(e.pageX - canvas.offsetLeft - imageX, e.pageY - canvas.offsetTop - imageY);
+				var x = e.pageX - canvas.offsetLeft - imageX, y = e.pageY - canvas.offsetTop - imageY;
+				var t = player.getSquadsAt(x, y);
+				if(t.length == 0) player.deploySquadAt(x, y);
+				else player.selectSquad(t[0]);
 				break;
 		}
 	}, false);
@@ -115,7 +144,7 @@ function input(){
 		held = false;
 	}, false);
 
-	document.addEventListener("mousemove", (e) =>{
+	document.addEventListener("mousemove", (e) => {
 		if(held){
 			imageX = (e.clientX - canvas.offsetLeft) - preX;
 			imageY = (e.clientY - canvas.offsetTop) - preY;
@@ -133,6 +162,9 @@ function input(){
 			case 87: //w
 				if(player.squadSizeSetting > 1) player.squadSizeSetting--;
 				break;
+			case 27: //Esc
+				player.deselectSquad();
+				break;
 		}
 	}, false);
 }
@@ -147,7 +179,7 @@ var image = document.getElementById("back"),
 var imageX = 0, imageY = 0;
 var preX = 0, preY = 0;
 var held = false;
-const clickRadius = 10;
+const clickRadius = 64*64;
 const ATTACK_INFANTRY = 5, ATTACK_SNIPER = 40, ARMOUR_INFANTRY = 10, ARMOUR_SNIPER = 2, RANGE_INFANTRY = 50, RANGE_SNIPER = 500;
 const SQUAD_TYPE_INFANTRY = 'Infantry', SQUAD_TYPE_SNIPER = 'Sniper';
 const HUD_SIZE = 10, HUD_COLOR = '#4286a4', HUD_FOREGROUND_COLOR = '#f5e513', HUD_PADDING = h / (3 * HUD_SIZE);
