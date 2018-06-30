@@ -1,10 +1,11 @@
 
 class Animation{
-	constructor(startX, endX, time){
+	constructor(startX, endX, time, callback){
 		this.startX = startX;
 		this.endX = endX;
 		this.time = time;
 		this.startTime = this.getTime();
+		this.callback = callback;
 	}
 	
 	start(){
@@ -13,7 +14,10 @@ class Animation{
 	
 	get(){
 		var t = this.getTime();
-		if(t > this.time + this.startTime) return this.endX;
+		if(t > this.time + this.startTime) {
+			if(this.callback) this.callback();
+			return this.endX;
+		}
 		else return this.startX + (t - this.startTime) * (this.endX - this.startX) / this.time;
 	}
 	
@@ -42,12 +46,26 @@ class Squad{
 			this.armour = ARMOUR_INFANTRY;
 			this.range = RANGE_INFANTRY;	
 		}
-		this.anim = new Animation(0, 1, SQUAD_SPAWN_TIME);
+		this.anim = new Animation(0, 1, SQUAD_SPAWN_TIME, undefined);
+		this.shot = new Animation(1, 0, SQUAD_ATTACK_LINGER_TIME, () => {
+			this.shouldDrawShot = false;
+		});
+		this.shouldDrawShot = false;
+		this.attackPoint = {x: 0, y: 0};
 	}
 	
 	draw(pen, mapPosX, mapPosY){
 		var img = (this.type == SQUAD_TYPE_INFANTRY) ? IMAGE_INFANTRY : IMAGE_SNIPER;
 		var size = this.anim.get() * img.width;
+		if(this.shouldDrawShot){
+			pen.beginPath();
+			pen.strokeStyle = 'rgba(' + SHOT_COLOR.r + ', ' + SHOT_COLOR.g + ', ' + SHOT_COLOR.b + ', ' + this.shot.get() + ')';
+			pen.lineWidth = SHOT_WIDTH;
+			pen.moveTo(this.x + mapPosX,  this.y + mapPosY);
+			pen.lineTo(this.attackPoint.x + mapPosX, this.attackPoint.y + mapPosY);
+			pen.stroke();
+			pen.closePath();
+		}
 		pen.drawImage(img, this.x - size/2 + mapPosX, this.y - size/2 + mapPosY, size, size);
 		pen.globalCompositeOperation = 'source-atop';
 		pen.fillRect(this.x - size/2 + mapPosX, this.y - size/2 + mapPosY, size, size);
@@ -59,12 +77,22 @@ class Squad{
 	}
 	
 	getAttackAt(distance){
-		return attack * Math.exp(-distance / range) * size;
+		return this.attack * Math.exp(-distance / this.range) * this.size;
 	}
 	
 	takeDamage(attackDealt){
-		health -= attackDealt / (size * armour);
-		if(health <= 0) died();
+		this.health -= attackDealt / (this.size * this.armour);
+		if(this.health <= 0) this.died();
+	}
+	
+	attackEnemySquad(squad){
+		if(squad.owner === this.owner) return;
+		squad.takeDamage(this.getAttackAt(Math.sqrt(
+			(this.x - squad.x) * (this.x - squad.x) + (this.y - squad.y) * (this.y - squad.y)
+			)));
+		this.shouldDrawShot = true;
+		this.attackPoint = {x: squad.x, y: squad.y};
+		this.shot.start();
 	}
 	
 	died(){
@@ -90,9 +118,7 @@ class Player{
 	}
 	
 	deselectSquad(){
-		if(this.selectedSquad) {
-			this.selectedSquad = undefined;
-		}
+		this.selectedSquad = undefined;
 	}
 	
 	deploySquadAt(x, y){
@@ -126,6 +152,11 @@ class Player{
 			pen.fillText("Attack: " + t.attack, x, y + i.height + 2 * fs);
 			pen.fillText("Armour: " + t.armour, x, y + i.height + 3 * fs);
 			pen.fillText("Soldiers: " + t.size, x, y + i.height + 4 * fs);
+			pen.beginPath();
+			pen.lineWidth = 1;
+			pen.arc(x + i.width/2, y + i.height/2, t.range, 0, 6.284);
+			pen.stroke();
+			pen.closePath();
 		}
 	}
 }
@@ -136,8 +167,8 @@ function draw(){
 	pen.clearRect(0, 0, w, h);
 	
 	player.drawSquads(pen, imageX, imageY);
-	pen.fillStyle = "#ff000077";
-	enemy.draw(pen, imageX, imageY);
+	enemy.drawSquads(pen, imageX, imageY);
+	
 	pen.globalCompositeOperation = 'destination-over';
 	pen.drawImage(image, imageX, imageY, 4 * image.width, 4 * image.height);
 	pen.globalCompositeOperation = 'source-over';
@@ -165,8 +196,24 @@ function input(){
 			case 2: //Right Click
 				var x = e.pageX - canvas.offsetLeft - imageX, y = e.pageY - canvas.offsetTop - imageY;
 				var t = player.getSquadsAt(x, y);
-				if(t.length == 0) player.deploySquadAt(x, y);
-				else player.selectSquad(t[0]);
+								
+				if(t.length == 0) {
+					var s = enemy.getSquadsAt(x, y);
+					if(s.length == 0){
+						if(player.selectedSquad) player.deselectSquad();
+						else player.deploySquadAt(x, y);
+					}
+					else{
+						if(player.selectedSquad){
+							player.selectedSquad.attackEnemySquad(s[0]);
+						}
+						else player.selectedSquad = s[0];
+					}
+				}
+				else{
+					if(player.selectedSquad === t[0]) player.deselectSquad();
+					else player.selectedSquad = t[0];
+				}
 				break;
 		}
 	}, false);
@@ -211,14 +258,20 @@ var imageX = 0, imageY = 0;
 var preX = 0, preY = 0;
 var held = false;
 const clickRadius = 64*64;
-const ATTACK_INFANTRY = 5, ATTACK_SNIPER = 40, ARMOUR_INFANTRY = 10, ARMOUR_SNIPER = 2, RANGE_INFANTRY = 50, RANGE_SNIPER = 500;
+const ATTACK_INFANTRY = 50, ATTACK_SNIPER = 40, ARMOUR_INFANTRY = 10, ARMOUR_SNIPER = 2, RANGE_INFANTRY = 150, RANGE_SNIPER = 500;
 const SQUAD_TYPE_INFANTRY = 'Infantry', SQUAD_TYPE_SNIPER = 'Sniper';
 const HUD_SIZE = 10, HUD_COLOR = '#4286a4ff', HUD_FOREGROUND_COLOR = '#f5e513ff', HUD_PADDING = h / (3 * HUD_SIZE);
-const SQUAD_SPAWN_TIME = 10;
-var player = new Player(1500, '#00ff0077', 10);
+const SQUAD_SPAWN_TIME = 10, SQUAD_ATTACK_LINGER_TIME = 25;
+const SHOT_COLOR = {r: 0.5, g: 0.5, b: 0.5}, SHOT_WIDTH = 5;
+
+const player = new Player(150, '#00ff0077', 10), enemy = new Player(150, '#ff000077', 10);
+
+
 var TIME = 0;
 
-var enemy = new Squad(510, 160, 10, undefined, SQUAD_TYPE_INFANTRY);
+enemy.deploySquadAt(160, 250);
+enemy.deploySquadAt(250, 250);
+enemy.deploySquadAt(560, 550);
 
 setInterval(draw, 1000/60);
 input();
