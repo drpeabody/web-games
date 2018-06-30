@@ -1,4 +1,28 @@
 
+class Animation{
+	constructor(startX, endX, time){
+		this.startX = startX;
+		this.endX = endX;
+		this.time = time;
+		this.startTime = this.getTime();
+	}
+	
+	start(){
+		this.startTime = this.getTime();
+	}
+	
+	get(){
+		var t = this.getTime();
+		if(t > this.time + this.startTime) return this.endX;
+		else return this.startX + (t - this.startTime) * (this.endX - this.startX) / this.time;
+	}
+	
+	getTime(){
+		return TIME;
+	}
+	
+}
+
 class Squad{
 	//Map Space X Y
 	constructor(x, y, size, ownerPlayer, type){
@@ -18,6 +42,16 @@ class Squad{
 			this.armour = ARMOUR_INFANTRY;
 			this.range = RANGE_INFANTRY;	
 		}
+		this.anim = new Animation(0, 1, SQUAD_SPAWN_TIME);
+	}
+	
+	draw(pen, mapPosX, mapPosY){
+		var img = (this.type == SQUAD_TYPE_INFANTRY) ? IMAGE_INFANTRY : IMAGE_SNIPER;
+		var size = this.anim.get() * img.width;
+		pen.drawImage(img, this.x - size/2 + mapPosX, this.y - size/2 + mapPosY, size, size);
+		pen.globalCompositeOperation = 'source-atop';
+		pen.fillRect(this.x - size/2 + mapPosX, this.y - size/2 + mapPosY, size, size);
+		pen.globalCompositeOperation = 'source-over';
 	}
 	
 	isEnemyOf(player){
@@ -74,22 +108,13 @@ class Player{
 		});
 	}
 	
-	drawSquads(pen, sniperImage, infantryImage, squadFillStyle, mapPosX, mapPosY){
+	drawSquads(pen, mapPosX, mapPosY){
 		if(this.squads.length == 0) return;
-		//pen.fillStyle = squadFillStyle;
-		this.squads.forEach((s) => {
-			switch(s.type){
-				case SQUAD_TYPE_INFANTRY:
-					pen.drawImage(infantryImage, s.x - infantryImage.width/2 + mapPosX, s.y - infantryImage.height/2 + mapPosY);
-					break;
-				case SQUAD_TYPE_SNIPER:
-					pen.drawImage(sniperImage, s.x - sniperImage.width/2 + mapPosX, s.y - sniperImage.height/2 + mapPosY);
-					break;
-			}
-		});
+		pen.fillStyle = this.color;
+		this.squads.forEach((s) => { s.draw(pen, mapPosX, mapPosY); });
 		var t = this.selectedSquad;
 		if(t){
-			var i = (t.type === SQUAD_TYPE_INFANTRY)? infantryImage: sniperImage;
+			var i = (t.type === SQUAD_TYPE_INFANTRY)? IMAGE_INFANTRY: IMAGE_SNIPER;
 			var x = t.x - i.width/2 + mapPosX, y = t.y - i.height/2 + mapPosY;
 			var fs = 3 * i.height / HUD_SIZE;
 			pen.lineWidth = 5;
@@ -107,10 +132,16 @@ class Player{
 
 
 function draw(){
+	TIME++;
 	pen.clearRect(0, 0, w, h);
-	if(image) pen.drawImage(image, imageX, imageY, 4 * image.width, 4 * image.height);
+	
+	player.drawSquads(pen, imageX, imageY);
+	pen.fillStyle = "#ff000077";
+	enemy.draw(pen, imageX, imageY);
+	pen.globalCompositeOperation = 'destination-over';
+	pen.drawImage(image, imageX, imageY, 4 * image.width, 4 * image.height);
+	pen.globalCompositeOperation = 'source-over';
 	drawHUD();
-	player.drawSquads(pen, image_sniper, image_infantry, "#ff0000", imageX, imageY);
 }
 
 function drawHUD() {
@@ -174,18 +205,20 @@ var pen = canvas.getContext("2d");
 
 var w = canvas.width, h = canvas.height;
 var image = document.getElementById("back"),
-	image_sniper = document.getElementById("sniper"),
-	image_infantry = document.getElementById("infantry");
+	IMAGE_SNIPER = document.getElementById("sniper"),
+	IMAGE_INFANTRY = document.getElementById("infantry");
 var imageX = 0, imageY = 0;
 var preX = 0, preY = 0;
 var held = false;
 const clickRadius = 64*64;
 const ATTACK_INFANTRY = 5, ATTACK_SNIPER = 40, ARMOUR_INFANTRY = 10, ARMOUR_SNIPER = 2, RANGE_INFANTRY = 50, RANGE_SNIPER = 500;
 const SQUAD_TYPE_INFANTRY = 'Infantry', SQUAD_TYPE_SNIPER = 'Sniper';
-const HUD_SIZE = 10, HUD_COLOR = '#4286a4', HUD_FOREGROUND_COLOR = '#f5e513', HUD_PADDING = h / (3 * HUD_SIZE);
-var player = new Player(1500, '#ff0000', 10);
+const HUD_SIZE = 10, HUD_COLOR = '#4286a4ff', HUD_FOREGROUND_COLOR = '#f5e513ff', HUD_PADDING = h / (3 * HUD_SIZE);
+const SQUAD_SPAWN_TIME = 10;
+var player = new Player(1500, '#00ff0077', 10);
+var TIME = 0;
 
-
+var enemy = new Squad(510, 160, 10, undefined, SQUAD_TYPE_INFANTRY);
 
 setInterval(draw, 1000/60);
 input();
