@@ -6,8 +6,8 @@ import { Player } from './player.js';
 function draw(){
 	pen.clearRect(0, 0, w, h);
 	
-	player.drawSquads(pen, imageX, imageY);
 	enemy.drawSquads(pen, imageX, imageY);
+	player.drawSquads(pen, imageX, imageY);
 	
 	pen.globalCompositeOperation = 'destination-over';
 	pen.drawImage(image, imageX, imageY, image.width, image.height);
@@ -37,7 +37,13 @@ function input(){
 					}
 					else{
 						if(player.selectedSquad){
-							player.selectedSquad.attackEnemySquad(s[0]);
+							if(player.selectedSquad.owner === player){
+								player.selectedSquad.attackEnemySquad(s[0]);
+							}
+							else if(player.selectedSquad === s[0]){
+								player.deselectSquad();
+							}
+							else player.selectedSquad = s[0];
 						}
 						else player.selectedSquad = s[0];
 					}
@@ -91,9 +97,10 @@ var imageX = 0, imageY = 0;
 var preX = 0, preY = 0;
 var held = false;
 
-const player = new Player(150, '#00ff0077', 10), enemy = new Player(150, '#ff000077', 10);
+const player = new Player(150, '#14F06Fff', 10), enemy = new Player(150, '#DB3832ff', 10);
 
-enemy.deploySquadAt(160, 250);
+enemy.deploySquadAt(250, 314);
+enemy.squadTypeSetting = globals.SQUAD_TYPE_SNIPER;
 enemy.deploySquadAt(250, 250);
 enemy.deploySquadAt(560, 550);
 

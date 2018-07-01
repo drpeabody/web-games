@@ -38,10 +38,16 @@ export class Player{
 	
 	drawSquads(pen, mapPosX, mapPosY, time){
 		if(this.squads.length == 0) return;
-		pen.fillStyle = this.color;
-		this.squads.forEach((s) => { s.draw(pen, mapPosX, mapPosY, time); });
 		var t = this.selectedSquad;
+		
+		
+		this.squads.forEach((s) => { 
+			pen.fillStyle = this.color;
+			s.draw(pen, mapPosX, mapPosY, time); 
+		});
+
 		if(t){
+			pen.globalCompositeOperation = 'destination-over';
 			var i = (t.type === globals.SQUAD_TYPE_INFANTRY)? globals.IMAGE_INFANTRY: globals.IMAGE_SNIPER;
 			var x = t.x - i.width/2 + mapPosX, y = t.y - i.height/2 + mapPosY;
 			var fs = 3 * i.height / globals.HUD_SIZE;
@@ -59,6 +65,8 @@ export class Player{
 			pen.arc(x + i.width/2, y + i.height/2, t.range, 0, 6.284);
 			pen.stroke();
 			pen.closePath();
+			pen.globalCompositeOperation = 'source-over';
 		}
+		
 	}
 }
